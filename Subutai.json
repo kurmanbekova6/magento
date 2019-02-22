@@ -1,4 +1,19 @@
 {
     "name": "${environmentName}",
-    "description": "Wordpress Standalone",
-    "version": "3.0.3",
+    "description": "Magento",
+    "version": "2.3.0",
+    "author":"https://github.com/kurmanbekova6",
+    "containers":[
+        {
+        "hostname": "${webContainerName}",
+        "template": "debian-stretch",
+         "peer-criteria":"HTTP-GROUP", 
+         "size": "${containerSize}",
+         "port-mapping":[
+             {
+               "protocol":"https",
+               "domain": ""
+             }
+         ]
+        }
+    ]
