@@ -1,0 +1,4 @@
+{
+    "name": "${environmentName}",
+    "description": "Wordpress Standalone",
+    "version": "3.0.3",
