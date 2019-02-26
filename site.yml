@@ -55,7 +55,7 @@
 
     - name: Get magento-cli
       get_url:
-        url: https://raw.githubusercontent.com/magento-cli/builds/gh-pages/phar/magento-cli.phar
+        url:
         dest: /usr/local/bin/magento
         validate_certs: no
 
