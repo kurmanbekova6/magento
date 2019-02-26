@@ -1,0 +1,131 @@
+# Ansible Playbook for Subutai Magento blueprint
+---
+
+- hosts: magento
+  remote_user: root
+  tasks:
+
+    - name: Disable dpkg fsync
+      raw: test -e /etc/dpkg/dpkg.cfg.d/unsafe-io || echo force-unsafe-io > /etc/dpkg/dpkg.cfg.d/unsafe-io
+
+    - name: Upgrade debian
+      apt:
+        update_cache: true
+        upgrade: true
+
+    - name: Install required debs
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - php7.0
+        - php7.0-cgi
+        - php7.0-mysql
+        - apache2
+        - libapache2-mod-php7.0
+        - unzip
+        - mariadb-server
+        - python-mysqldb
+        - apache2
+        - libapache2-mod-php7.0
+        - unzip
+        - curl
+        - mariadb-server
+        - python-mysqldb
+
+    - name: Install limits.ini
+      template:
+        src: files/limits.ini
+        dest: /etc/php/7.0/mods-available/limits.ini
+
+    - name: Activate limits.ini
+      shell: phpenmod limits
+
+    - name: Create database
+      mysql_db:
+        name: magento
+        state: present
+        encoding: utf8
+
+    - name: Create database user
+      mysql_user:
+        name: wordpress
+        password: drupal
+        priv: "drupal.*:ALL"
+
+    - name: Get magento-cli
+      get_url:
+        url: https://raw.githubusercontent.com/magento-cli/builds/gh-pages/phar/magento-cli.phar
+        dest: /usr/local/bin/magento
+        validate_certs: no
+
+    - name: Make magento-cli executable
+      file:
+        path: /usr/local/bin/magento
+        state: touch
+        mode: u+rwx,g+rx,o+rx
+
+    - name: Download Magento Core
+      shell: magento core download --allow-root
+      args:
+        chdir: /var/www/html
+        creates: /var/www/html/index.php
+
+    - name: Create Magento Config
+      shell: magento config create --dbname=magento --dbuser=magento --dbpass=magento --allow-root
+      args:
+        chdir: /var/www/html
+        creates: /var/www/html/magento-config.php
+
+    - name: Install Magento
+      shell: magento core install --url='{{domain_name}}' --title='{{site_title}}' --admin_user='{{admin_user}}' --admin_password='{{admin_pwd}}' --admin_email='info@magento-cli.org' --skip-email --allow-root
+      args:
+        chdir: /var/www/html
+
+    - name: Set site description
+      shell: magento option update blogdescription '{{site_description}}' --allow-root
+      args:
+        chdir: /var/www/html
+
+    - name: Change to https
+      shell: magento search-replace 'http://{{domain_name}}' 'https://{{domain_name}}' --allow-root
+      args:
+        chdir: /var/www/html
+
+    - name: Insert extra config
+      blockinfile:
+        path: /var/www/html/magento-config.php
+        marker: "/* {mark} ANSIBLE MANAGED BLOCK */"
+        insertafter: '^\$table_prefix.*$'
+        block: |
+          if ( $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https' )
+          {
+                $_SERVER['HTTPS']       = 'on';
+                        $_SERVER['SERVER_PORT'] = '443';
+                        define('FORCE_SSL_ADMIN', true);
+          }
+          if ( isset($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+                $_SERVER['HTTP_HOST'] = $_SERVER['HTTP_X_FORWARDED_HOST'];
+          }
+
+    - name: Delete Unused Plugins
+      shell: magento plugin delete akismet hello --allow-root
+      args:
+        chdir: /var/www/html
+
+    - name: Remove original index.html
+      file:
+        name: /var/www/html/index.html
+        state: absent
+
+    - name: Change ownership
+      file:
+        path: /var/www/html
+        recurse: yes
+        owner: www-data
+        group: www-data
+
+    - name: Restart apache
+      service:
+        name: apache2
+        state: restarted
